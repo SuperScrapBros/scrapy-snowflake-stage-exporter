@@ -43,7 +43,7 @@ class SnowflakeStageExporter(AbstractContextManager):
         connection_kwargs: Dict[str, Any] = None,
         stage: str = "@~",
         stage_path: str = "{table_path}/{instance_ms}_{batch_n}.jl",
-        max_file_size: int = 2 ** 30,
+        max_file_size: int = 2**30,
         predefined_column_types: Dict[str, Dict[str, str]] = None,
         ignore_unexpected_fields: bool = True,
         allow_varying_value_types: bool = False,
@@ -67,9 +67,7 @@ class SnowflakeStageExporter(AbstractContextManager):
         for attr in ("create_tables_on", "populate_tables_on", "clear_stage_on"):
             val = getattr(self, "_" + attr)
             if val not in exporter_events:
-                raise ValueError(
-                    f"unexpected value ({val!r}) for {attr!r}, expected one of {exporter_events!r}"
-                )
+                raise ValueError(f"unexpected value ({val!r}) for {attr!r}, expected one of {exporter_events!r}")
 
         if any(not v for v in self._predefined_column_types.values()):
             raise ValueError("values of 'predefined_column_types' can't be empty")
@@ -81,6 +79,7 @@ class SnowflakeStageExporter(AbstractContextManager):
             user=user,
             password=password,
             account=account,
+            client_session_keep_alive=True,
             **(connection_kwargs or {}),
         )
         self._table_buffers: Dict = {}  # {table_path: tmp_buffer_file}
@@ -147,9 +146,7 @@ class SnowflakeStageExporter(AbstractContextManager):
         batch_n = len(self._exported_fpaths.setdefault(table_path, [])) + 1
         with TemporaryDirectory() as tempdir:
             fpath = self.fpath_for_table(table_path, batch_n)
-            logger.info(
-                "Flushing buffer of %r to %r (batch %d)", table_path, fpath, batch_n
-            )
+            logger.info("Flushing buffer of %r to %r (batch %d)", table_path, fpath, batch_n)
             prefix, fname = fpath.rsplit("/", 1)
             symlink_path = os.path.join(tempdir, fname)
             os.symlink(tmp_file.name, symlink_path)
@@ -212,21 +209,14 @@ class SnowflakeStageExporter(AbstractContextManager):
             return
         logger.info("Creating table %r", table_path)
         cols = ", ".join(
-            [
-                f"{normalize_identifier(col)} {coltype}"
-                for col, coltype in self.get_column_types(table_path).items()
-            ]
+            [f"{normalize_identifier(col)} {coltype}" for col, coltype in self.get_column_types(table_path).items()]
         )
         self.conn.cursor().execute(f"CREATE TABLE IF NOT EXISTS {table_path} ({cols})")
         self._created_tables_for.add(table_path)
 
     def populate_table(self, table_path: str) -> None:
         logger.info("Populating table %r", table_path)
-        new_fpaths = [
-            fp
-            for fp in self._exported_fpaths[table_path]
-            if fp not in self._copied_fpaths
-        ]
+        new_fpaths = [fp for fp in self._exported_fpaths[table_path] if fp not in self._copied_fpaths]
         coltypes = self.get_column_types(table_path)
         cols = ", ".join(map(normalize_identifier, coltypes))
         safe_fields = [field.replace('"', '""') for field in coltypes]
@@ -253,18 +243,14 @@ class SnowflakeStageExporter(AbstractContextManager):
 
     def clear_stage(self, fpaths: Iterable[str] = None) -> None:
         if fpaths is None:
-            fpaths = [
-                fpath for fpaths in self._exported_fpaths.values() for fpath in fpaths
-            ]
+            fpaths = [fpath for fpaths in self._exported_fpaths.values() for fpath in fpaths]
             count_msg = f"{len(fpaths)} (all)"
         else:
             fpaths = list(fpaths or [])
             count_msg = str(len(fpaths))
         logger.info("Removing %s staged files", count_msg)
         if fpaths:
-            self.conn.cursor().executemany(
-                "REMOVE %s", [(f"{self._stage}/{fpath}",) for fpath in fpaths]
-            )
+            self.conn.cursor().executemany("REMOVE %s", [(f"{self._stage}/{fpath}",) for fpath in fpaths])
 
     def finish_export(self) -> None:
         self.flush_all_table_buffers()
