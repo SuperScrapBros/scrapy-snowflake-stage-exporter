@@ -1,3 +1,8 @@
+# [0.0.1]
+- Initial release, add `client_session_keep_alive`
+
+Forked from:
+
 # [0.0.4]
 - Only run CREATE TABLE statements once, don't track field types afterwards either.
 - Run COPY INTO only for new staged files (effectively no difference given Snowflake tables skip already copied files).
